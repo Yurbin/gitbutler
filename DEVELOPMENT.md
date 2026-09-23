@@ -362,6 +362,24 @@ $ pnpm tauri build --features devtools,builtin-but,disable-auto-updates,nightly 
 
 This will make an asset similar to our nightly build.
 
+### Linux portable build
+
+On Linux x64, the release pipeline additionally produces a portable archive
+(`GitButler_<version>_x64_portable.tar.gz`) next to the AppImage, .deb and
+.rpm. It is a plain directory — extract it anywhere and run `./AppRun`, no
+installation and no FUSE required. Like every other Linux build it still
+needs `libwebkit2gtk-4.1` and `libgtk-3` from the system, and it contains the
+`but` CLI at `usr/bin/but`.
+
+To build it locally (on an x64 Linux machine), run the same script CI uses:
+
+```bash
+$ ./scripts/release.sh --channel nightly --dist ./release --version <version>
+```
+
+This requires the `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` environment variables, same as CI.
+
 ### Building on Windows
 
 Building on Windows is a bit of a tricky process. Here are some helpful tips.

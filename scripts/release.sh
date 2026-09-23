@@ -275,6 +275,49 @@ elif [ "$OS" = "linux" ]; then
 	cp "$RPM" "$RELEASE_DIR"
 	cp "$BUT_CLI" "$RELEASE_DIR"
 
+	PORTABLE_ARCHIVE=""
+	if [ "$ARCH" = "x86_64" ]; then
+		# Package the app as a portable archive: the AppImage is extracted into a
+		# plain directory that runs from anywhere, without installing and without
+		# FUSE. The extracted usr/bin + usr/lib layout is the same one Tauri
+		# resolves resources from inside the AppImage, so the app works as is.
+		PORTABLE_BASE="$(basename "$APPIMAGE" .AppImage)"
+		PORTABLE_WORK_DIR="$TMP_DIR/portable"
+		mkdir -p "$PORTABLE_WORK_DIR"
+
+		(
+			cd "$PORTABLE_WORK_DIR"
+			"$APPIMAGE" --appimage-extract >/dev/null
+			mv squashfs-root "$PORTABLE_BASE-portable"
+		)
+
+		PORTABLE_DIR="$PORTABLE_WORK_DIR/$PORTABLE_BASE-portable"
+		if [ ! -x "$PORTABLE_DIR/usr/bin/gitbutler-tauri" ]; then
+			error "usr/bin/gitbutler-tauri not found in extracted AppImage"
+		fi
+
+		# Same symlink the .deb ships, so the but CLI works out of the box.
+		ln -s gitbutler-tauri "$PORTABLE_DIR/usr/bin/but"
+
+		cat >"$PORTABLE_DIR/README.txt" <<-'EOF'
+			GitButler portable for Linux
+
+			Extract anywhere and run ./AppRun — no installation required.
+
+			Like the .deb package, this build needs libwebkit2gtk-4.1 and
+			libgtk-3 from your distribution (e.g. apt install libwebkit2gtk-4.1-0).
+
+			The but CLI is available at usr/bin/but.
+
+			Settings and repositories are stored in the standard XDG locations
+			(~/.local/share/com.gitbutler.app, ~/.config/gitbutler),
+			not inside this folder.
+		EOF
+
+		PORTABLE_ARCHIVE="$RELEASE_DIR/${PORTABLE_BASE}_portable.tar.gz"
+		tar --owner=0 --group=0 -czf "$PORTABLE_ARCHIVE" -C "$PORTABLE_WORK_DIR" "$PORTABLE_BASE-portable"
+	fi
+
 	info "built:"
 	info "	- $RELEASE_DIR/$(basename "$APPIMAGE")"
 	info "	- $RELEASE_DIR/$(basename "$APPIMAGE_UPDATER")"
@@ -282,6 +325,9 @@ elif [ "$OS" = "linux" ]; then
 	info "	- $RELEASE_DIR/$(basename "$DEB")"
 	info "	- $RELEASE_DIR/$(basename "$RPM")"
 	info "	- $RELEASE_DIR/$(basename "$BUT_CLI")"
+	if [ -n "$PORTABLE_ARCHIVE" ]; then
+		info "	- $PORTABLE_ARCHIVE"
+	fi
 elif [ "$OS" = "windows" ]; then
 	WINDOWS_INSTALLER="$(find "$BUNDLE_DIR/msi" -name \*.msi)"
 	WINDOWS_UPDATER="$(find "$BUNDLE_DIR/msi" -name \*.msi.zip)"

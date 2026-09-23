@@ -1,0 +1,114 @@
+# Builds the Linux x64 artifacts (including the portable tar.gz) on a fork,
+# where the GitButler signing secrets don't exist. Mirrors the linux x64 part
+# of publish.yaml, minus GPG/updater signing and S3 publishing: artifacts are
+# uploaded as workflow artifacts instead. The updater signatures in the
+# produced files are generated with a throwaway key and are not meaningful.
+name: "Portable build (linux x64)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        required: true
+        description: release config to build with
+        default: nightly
+        options:
+          - release
+          - nightly
+      version:
+        type: string
+        required: true
+        description: version baked into the app
+        default: "0.0.0"
+
+permissions: {}
+
+jobs:
+  build-portable:
+    runs-on: ubuntu-22.04
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Init Node Environment
+        uses: ./.github/actions/init-env-node
+
+      - name: Install linux dependencies
+        shell: bash
+        run: |
+          sudo apt update;
+          sudo apt install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            xdg-utils;
+
+          webkit_version='2.50.*'
+          sudo apt install -y \
+            libwebkit2gtk-4.1-0="$webkit_version" \
+            libwebkit2gtk-4.1-dev="$webkit_version" \
+            libjavascriptcoregtk-4.1-0="$webkit_version" \
+            libjavascriptcoregtk-4.1-dev="$webkit_version" \
+            gir1.2-javascriptcoregtk-4.1="$webkit_version" \
+            gir1.2-webkit2-4.1="$webkit_version";
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: portable-${{ inputs.channel }}
+
+      - name: Resolve frontend mode
+        shell: bash
+        run: |
+          if [ "${{ inputs.channel }}" = "release" ]; then
+            echo "VITEMODE=production" >> "$GITHUB_ENV"
+          else
+            echo "VITEMODE=nightly" >> "$GITHUB_ENV"
+          fi
+
+      # On CI the tauri beforeBuildCommand skips the frontend build, so it has
+      # to be done here, same as in publish.yaml.
+      - name: Build frontend
+        run: pnpm build:desktop -- --mode "${{ env.VITEMODE }}"
+      - name: Build MCP apps
+        run: pnpm --filter @gitbutler/but-mcp-app build
+
+      # tauri refuses to build the v1Compatible updater artifacts without a
+      # signing key, so hand it a throwaway one.
+      - name: Generate throwaway updater signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: pnpm tauri signer generate --ci -w "$HOME/tauri-private.key"
+
+      # No fat LTO / size optimization here to keep fork builds faster; add
+      # CARGO_PROFILE_RELEASE_LTO=fat, CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+      # and CARGO_PROFILE_RELEASE_OPT_LEVEL=s to match the release pipeline.
+      - name: Build app and portable archive
+        shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          GITBUTLER_REQUIRE_MCP_APP: "1"
+        run: |
+          export TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/tauri-private.key")"
+          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+          ./scripts/release.sh \
+            --channel "${{ inputs.channel }}" \
+            --dist "./release" \
+            --version "${{ inputs.version }}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        name: Upload artifacts
+        with:
+          name: linux-x64-build-${{ github.run_number }}
+          path: release/linux/x86_64/
+          retention-days: 7
+          if-no-files-found: error
