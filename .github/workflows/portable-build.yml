@@ -29,6 +29,9 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       CARGO_TERM_COLOR: always
+      # release.sh rejects an empty updater signing password, and the throwaway
+      # key below is encrypted with this same value.
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: portable-ci-dummy
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,9 +88,7 @@ jobs:
       # tauri refuses to build the v1Compatible updater artifacts without a
       # signing key, so hand it a throwaway one.
       - name: Generate throwaway updater signing key
-        env:
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        run: pnpm tauri signer generate --ci -w "$HOME/tauri-private.key"
+        run: pnpm tauri signer generate --ci --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" -w "$HOME/tauri-private.key"
 
       # No fat LTO / size optimization here to keep fork builds faster; add
       # CARGO_PROFILE_RELEASE_LTO=fat, CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
@@ -99,7 +100,6 @@ jobs:
           GITBUTLER_REQUIRE_MCP_APP: "1"
         run: |
           export TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/tauri-private.key")"
-          export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
           ./scripts/release.sh \
             --channel "${{ inputs.channel }}" \
             --dist "./release" \
