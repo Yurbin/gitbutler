@@ -10,7 +10,7 @@ import {
 } from "#ui/api/mutations.ts";
 import { forgeInfoOptions, headInfoQueryOptions } from "#ui/api/queries.ts";
 import { classes } from "@gitbutler/ui-react/classes.ts";
-import { GraphSegment, type GraphSegmentStatus } from "@gitbutler/ui-react/GraphSegment.tsx";
+import { GraphSegment, type GraphSegmentStatus } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "@gitbutler/ui-react/Icon.tsx";
 import { TooltipPopup } from "@gitbutler/ui-react/Tooltip.tsx";
 import { commitBody, commitForgeUrl, commitIsDiverged, commitTitle } from "#ui/commit.ts";
@@ -52,7 +52,6 @@ export const CommitRow: FC<
 		projectId: string;
 		/** `null` on a stack without an id, where edit mode cannot be offered. */
 		stackId: string | null;
-		dryRunCommit: Commit | null;
 		checkCommit: (evt: { commitId: string; shiftKey: boolean }) => void;
 		amendCommit: () => void;
 		canAmendCommit: boolean;
@@ -71,7 +70,6 @@ export const CommitRow: FC<
 	commit,
 	projectId,
 	stackId,
-	dryRunCommit,
 	checkCommit,
 	amendCommit,
 	canAmendCommit,
@@ -122,7 +120,6 @@ export const CommitRow: FC<
 		...commit,
 		message: optimisticMessage,
 	};
-	const { hasConflicts } = dryRunCommit ? dryRunCommit : commitWithOptimisticMessage;
 
 	const { mutate: commitInsertBlank } = useCommitInsertBlank();
 	const { isPending: isCommitDiscardPending, mutate: commitDiscard } = useCommitDiscard();
@@ -281,8 +278,8 @@ export const CommitRow: FC<
 		await window.lite.openInWebBrowser(mforgeUrl.url);
 	};
 
-	const title = commitTitle(commitWithOptimisticMessage.message);
-	const body = commitBody(commitWithOptimisticMessage.message);
+	const title = commitTitle(optimisticMessage);
+	const body = commitBody(optimisticMessage);
 
 	// Items that only read the commit, the whole menu of a commit outside the workspace.
 	const readOnlyMenuItems: Array<NativeMenuItem> = [
@@ -453,7 +450,7 @@ export const CommitRow: FC<
 			) : (
 				<CommitRowContent
 					commit={commitWithOptimisticMessage}
-					hasConflicts={hasConflicts}
+					hasConflicts={commit.hasConflicts}
 					descriptionId={descriptionId}
 				/>
 			)}

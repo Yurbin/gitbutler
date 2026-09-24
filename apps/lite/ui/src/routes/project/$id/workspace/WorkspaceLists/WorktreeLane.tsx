@@ -32,7 +32,7 @@ import {
 } from "#ui/api/queries.ts";
 import { commitTitle } from "#ui/commit.ts";
 import { classes } from "@gitbutler/ui-react/classes.ts";
-import { GraphGap, GraphSegment } from "@gitbutler/ui-react/GraphSegment.tsx";
+import { GraphGap, GraphSegment } from "#ui/components/GraphSegment.tsx";
 import { Icon } from "@gitbutler/ui-react/Icon.tsx";
 import { compareFilePaths } from "#ui/file-order.ts";
 import { revealInFolderLabel } from "#ui/hotkeys.ts";
@@ -479,7 +479,6 @@ const WorktreeRows: FC<{
 														commit={commit}
 														projectId={projectId}
 														stackId={null}
-														dryRunCommit={null}
 														checkCommit={noop}
 														amendCommit={noop}
 														canAmendCommit={false}
